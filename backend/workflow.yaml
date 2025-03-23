@@ -1,0 +1,69 @@
+name: Build and deploy Node.js backend to Azure Web App - ReformerSpainSA-Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Necesario para actions/checkout
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22.x'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Run tests (if available)
+        run: |
+          cd backend
+          npm test
+        continue-on-error: true # No detiene el flujo si falla
+
+      - name: Package backend for deployment
+        run: |
+          cd backend
+          zip -r ../backend-release.zip ./
+
+      - name: Upload artifact for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-app
+          path: backend-release.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-app
+
+      - name: Unzip artifact for deployment
+        run: unzip backend-release.zip
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'ReformerSpainSA-Backend'
+          slot-name: 'Production'
+          package: .
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_BACKEND }}
